@@ -38,7 +38,7 @@ public struct DispatchQueueSyncService {
         case concurrent
     }
 
-    init(
+    public init(
         serialQueue: DispatchQueue = DispatchQueue(
             label: "com.udf.store.serial.queue",
             qos: .userInitiated

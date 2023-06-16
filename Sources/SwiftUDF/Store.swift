@@ -27,7 +27,7 @@ where StoreState: StateType,
     private let queueService: DispatchQueueSyncService
     private var middlewaresRepository: StoreMiddlewareRepository
 
-    init(
+    public init(
         state: StoreState,
         dispatcher: @escaping StoreDispatcher,
         reducer: @escaping StoreReducer,
