@@ -58,7 +58,6 @@ where StoreState: StateType,
                     processMiddlewares = middlewares
                 }
                 processMiddlewares.publisher
-//                    .subscribe(on: queue)
                     .flatMap { $0(state, action, packages) }
                     .handleEvents(receiveOutput: { [weak self] _ in self?.index += 1 })
                     .sink(receiveCompletion: {[unowned self] in

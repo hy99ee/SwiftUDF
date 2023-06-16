@@ -14,9 +14,9 @@ where StoreState: StateType,
       StorePackages: EnvironmentPackages,
       StoreTransition: TransitionType
 {
-    typealias StoreMiddlewareRepository = MiddlewareRepository<StoreState, StoreAction, StorePackages>
-    typealias StoreDispatcher = DispatcherType<StoreAction, StoreMutation, StorePackages>
-    typealias StoreReducer = ReducerType<StoreState, StoreMutation, StoreTransition>
+    public typealias StoreMiddlewareRepository = MiddlewareRepository<StoreState, StoreAction, StorePackages>
+    public typealias StoreDispatcher = DispatcherType<StoreAction, StoreMutation, StorePackages>
+    public typealias StoreReducer = ReducerType<StoreState, StoreMutation, StoreTransition>
 
     public let transition = PassthroughSubject<StoreTransition, Never>()
 
@@ -44,7 +44,7 @@ where StoreState: StateType,
     }
 
     public func dispatch(_ action: StoreAction, isRedispatch: Bool = false, on queueType: DispatchQueueSyncService.DispatchQueueType = .serial) {
-        middlewaresRepository.dispatch( // Middleware
+        middlewaresRepository.dispatch(    // Middleware
             state: state,
             action: action,
             packages: packages,
