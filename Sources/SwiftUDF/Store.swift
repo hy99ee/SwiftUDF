@@ -63,7 +63,8 @@ where StoreState: StateType,
         .flatMap { [unowned self] in dispatcher($0, self.packages) }   // Dispatch
         .flatMap { [unowned self] in reducer(state, $0) }   // Reduce
         .assertNoFailure()
-        .compactMap({
+        .receive(on: DispatchQueue.main)
+        .compactMap {
             switch $0 {
             case let .state(state):
                 return state
@@ -71,7 +72,7 @@ where StoreState: StateType,
                 self.transition.send(destination)
                 return nil
             }
-        })
+        }
         .assign(to: &$state)
     }
 
