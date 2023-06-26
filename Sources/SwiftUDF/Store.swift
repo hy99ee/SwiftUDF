@@ -23,7 +23,7 @@ where StoreState: StateType,
     @Published private(set) public var state: StoreState
     private let dispatcher: StoreDispatcher
     private let reducer: StoreReducer
-    private(set) var packages: StorePackages
+    private(set) public var packages: StorePackages
     private let queueService: DispatchQueueSyncService
     private var middlewaresRepository: StoreMiddlewareRepository
 
