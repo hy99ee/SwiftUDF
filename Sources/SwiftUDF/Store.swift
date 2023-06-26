@@ -20,7 +20,7 @@ where StoreState: StateType,
 
     public let transition = PassthroughSubject<StoreTransition, Never>()
 
-    @Published private(set) var state: StoreState
+    @Published private(set) public var state: StoreState
     private let dispatcher: StoreDispatcher
     private let reducer: StoreReducer
     private(set) var packages: StorePackages
