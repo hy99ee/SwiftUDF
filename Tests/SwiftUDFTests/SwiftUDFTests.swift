@@ -1,97 +1,152 @@
 import XCTest
 import Combine
+import SwiftUI
 @testable import SwiftUDF
 
+protocol StoreTestsContainerType {
+    associatedtype Store: StateStoreType
+    associatedtype TestCase: Equatable
 
-typealias Store = StateStore<MockState, MockAction, MockMutation, MockPackages, CloseTransition>
-extension Store {
-    static let middlewareOperation: Store.StoreMiddlewareRepository.Middleware = { state, action, packages in
-        print("Middleware get action: \(action)")
+    func makeSUT(for testCase: TestCase) -> Store
+}
+
+class StoreTestsContainer: StoreTestsContainerType {
+    typealias TestCase = TestCaseValue
+    typealias Store = StateStore<TestState, TestAction, TestMutation, TestPackages, CloseTransition>
+
+    enum TestCaseValue: String {
+        case middleware
+        case flow
+    }
+
+    let printMiddleware: Store.Middleware = { _, action, _ in
+        print("Mock middleware get action: \(action)")
         return Just(action)
-            .setFailureType(to: StoreMiddlewareRepository.MiddlewareRedispatch.self)
+            .setFailureType(to: Store.MiddlewareRedispatch.self)
             .eraseToAnyPublisher()
     }
-}
 
-enum MockAction: Action, Hashable {
-    case mockAction
-}
-enum MockMutation: Mutation {
-    case mockMutation
-}
-struct MockState: StateType, ReinitableByNewSelf {
-    var result = false
-}
-
-let mockDispatcher: DispatcherType<MockAction, MockMutation, MockPackages> = { action, packages in
-    switch action {
-    case .mockAction:
-        return Just(.mockMutation).eraseToAnyPublisher()
-    }
-}
-let mockReducer: ReducerType<MockState, MockMutation, CloseTransition> = { _state, mutation in
-    var state = _state
-
-    switch mutation {
-    case .mockMutation:
-        state.result = true
-    }
-
-    return Just(.state(state)).eraseToAnyPublisher()
-}
-
-class MockPackages: EnvironmentPackages, Unreinitable {}
-
-
-class StoreTests: XCTestCase {
-    var store: Store!
-    var state: MockState!
-    var middlewares: [Store.StoreMiddlewareRepository.Middleware]!
-    var packages: MockPackages!
-    var dispatcher: DispatcherType<MockAction, MockMutation, MockPackages>!
-    var reducer: ReducerType<MockState, MockMutation, CloseTransition>!
-
-    override func setUp() {
-        super.setUp()
-
-        state = MockState()
-        middlewares = []
-        packages = MockPackages()
-        dispatcher = mockDispatcher
-        reducer = mockReducer
-
-        store = Store(
-            state: state,
-            dispatcher: dispatcher,
-            reducer: reducer,
-            packages: packages,
-            middlewares: middlewares
-        )
-    }
-
-    override func tearDown() {
-        store = nil
-        middlewares = nil
-        packages = nil
-        dispatcher = nil
-        reducer = nil
-        super.tearDown()
-    }
-
-    func testStoreDispatchFlow() {
-        let alertExpectation = XCTestExpectation(description: "StoreFlowTest")
-
-        self.store.dispatch(.mockAction, on: .concurrent)
-
-        DispatchQueue.main.async {
-            self.store.dispatch(.mockAction, on: .concurrent)
+    let repeatMiddleware: Store.Middleware = { state, action, _ in
+        if state.count <= 5 {
+            return Fail(error: Store.MiddlewareRedispatch.redispatch(actions: [.increaseCount])).eraseToAnyPublisher()
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        return Just(action)
+            .setFailureType(to: Store.MiddlewareRedispatch.self)
+            .eraseToAnyPublisher()
+    }
+
+    let flowReducer: Store.StoreReducer = { _state, mutation in
+        var state = _state
+        state.result = true
+
+        return Just(.state(state)).eraseToAnyPublisher()
+    }
+
+    let middlewareReducer: Store.StoreReducer = { _state, mutation in
+        var state = _state
+
+        switch mutation {
+        case .changeResult: state.result = true
+        case .increaseCount: state.count += 1
+        }
+
+        return Just(.state(state)).eraseToAnyPublisher()
+    }
+
+    let flowDispatcher: Store.StoreDispatcher = { action, packages in
+        Just(.changeResult).eraseToAnyPublisher()
+    }
+
+    let middlewareDispatcher: Store.StoreDispatcher = { action, packages in
+        switch action {
+        case .changeResult: return Just(.changeResult).eraseToAnyPublisher()
+        case .increaseCount: return Just(.increaseCount).eraseToAnyPublisher()
+        }
+    }
+
+    enum TestAction: Action, Hashable {
+        case changeResult
+        case increaseCount
+    }
+
+    enum TestMutation: Mutation {
+        case changeResult
+        case increaseCount
+    }
+
+    struct TestState: StateType, ReinitableByNewSelf {
+        var result = false
+        var count = 0
+    }
+
+    class TestPackages: EnvironmentPackages, Unreinitable {}
+
+    func makeSUT(for testCase: TestCaseValue) -> Store {
+        switch testCase {
+        case .middleware:
+            return Store(
+                state: TestState(),
+                dispatcher: middlewareDispatcher,
+                reducer: middlewareReducer,
+                packages: TestPackages(),
+                middlewares: [printMiddleware, repeatMiddleware]
+            )
+        case .flow:
+            return Store(
+                state: TestState(),
+                dispatcher: flowDispatcher,
+                reducer: flowReducer,
+                packages: TestPackages(),
+                middlewares: [printMiddleware]
+            )
+        }
+
+    }
+}
+
+class StoreFlowTests: XCTestCase {
+    func testStoreDispatchFlow() {
+        var store: StoreTestsContainer.Store! = StoreTestsContainer().makeSUT(for: .flow)
+
+        let alertExpectation = XCTestExpectation(description: "StoreFlowTest")
+
+        store.dispatch(.changeResult, on: .concurrent)
+
+        DispatchQueue.main.async {
+            store.dispatch(.changeResult, on: .concurrent)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             alertExpectation.fulfill()
         }
 
-        wait(for: [alertExpectation], timeout: 1)
-        XCTAssertTrue(self.store.state.result)
+        wait(for: [alertExpectation], timeout: 1.5)
+        XCTAssertTrue(store.state.result)
+        store = nil
+        XCTAssertNil(store)
+    }
+
+    func testStoreMiddlewareFlow() {
+        var store: StoreTestsContainer.Store! = StoreTestsContainer().makeSUT(for: .middleware)
+        let alertExpectation = XCTestExpectation(description: "StoreMiddlewareTest")
+
+        store.dispatch(.increaseCount, on: .concurrent)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            store.dispatch(.increaseCount, on: .concurrent)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            store.dispatch(.increaseCount, on: .concurrent)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            alertExpectation.fulfill()
+        }
+
+        wait(for: [alertExpectation], timeout: 2.5)
+        XCTAssertEqual(store.state.count, 3)
+        store = nil
+        XCTAssertNil(store)
     }
 }

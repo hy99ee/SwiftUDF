@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 public protocol MiddlewareRepositoryType {
     associatedtype StoreState: StateType
@@ -66,20 +67,26 @@ where StoreState: StateType,
                             promise(.success(action))
                         case let .failure(.redispatch(actions, type)):
                             switch type {
-                            case .excludeRedispatch:
-                                if processMiddlewares.count - 1 >= self.index {
-                                    self.processMiddlewares.remove(at: self.index)
-                                }
-                            case .repeatRedispatch:
+                            case .repeatRedispatch where lastRedispatchActionCount < 5:
                                 if actions.contains(action) {
                                     lastRedispatchActionCount += 1
-                                    if lastRedispatchActionCount > 3 {
-                                        String("Repeat redispatch return with the same action").withCString { messagePointer in
-                                            runtimeReporter(messagePointer)
-                                        }
+                                    if lastRedispatchActionCount > 1 {
+                                        os_log(
+                                            .fault,
+                                            dso: reporterInfo.dli_fbase,
+                                            log: OSLog(
+                                                subsystem: "com.apple.runtime-issues",
+                                                category: "SwiftUDF"
+                                            ),
+                                            "Repeat redispatch return with the same action"
+                                        )
                                     }
                                 } else {
                                     lastRedispatchActionCount = 0
+                                }
+                            default:
+                                if processMiddlewares.count - 1 >= self.index {
+                                    self.processMiddlewares.remove(at: self.index)
                                 }
                             }
                             promise(.failure(.redispatch(actions: actions, type: type)))
@@ -89,4 +96,17 @@ where StoreState: StateType,
             }
         }.eraseToAnyPublisher()
     }
+
+    let reporterInfo: Dl_info = {
+        var info = Dl_info()
+        dladdr(
+            dlsym(
+                dlopen(nil, RTLD_LAZY),
+                "$s10Foundation15AttributeScopesO7SwiftUIE05swiftE0AcDE0D12UIAttributesVmvg"
+            ),
+            &info
+        )
+
+        return info
+    }()
 }

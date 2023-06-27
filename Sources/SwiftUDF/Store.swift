@@ -1,13 +1,34 @@
 import SwiftUI
 import Combine
 
+public protocol StateStoreType: ObservableObject, TransitionSender, Reinitable {
+    associatedtype StoreState: StateType
+    associatedtype StoreAction: Action
+    associatedtype StoreMutation: Mutation
+    associatedtype StorePackages: EnvironmentPackages
+    associatedtype StoreTransition: TransitionType
+    associatedtype StoreMiddlewareRepository: MiddlewareRepositoryType
+
+    var state: StoreState { get }
+    var packages: StorePackages { get }
+
+    func dispatch(_ action: StoreAction, on queueType: DispatchQueueSyncService.DispatchQueueType, isRedispatch: Bool)
+}
+
+extension StateStoreType {
+    public typealias StoreDispatcher = DispatcherType<StoreAction, StoreMutation, StorePackages>
+    public typealias StoreReducer = ReducerType<StoreState, StoreMutation, StoreTransition>
+    public typealias Middleware = StoreMiddlewareRepository.Middleware
+    public typealias MiddlewareRedispatch = StoreMiddlewareRepository.MiddlewareRedispatch
+}
+
 public final class StateStore<
     StoreState,
     StoreAction,
     StoreMutation,
     StorePackages,
     StoreTransition
->: ObservableObject, TransitionSender, Reinitable
+>: StateStoreType
 where StoreState: StateType,
       StoreAction: Action,
       StoreMutation: Mutation,
@@ -43,7 +64,7 @@ where StoreState: StateType,
         self.middlewaresRepository = MiddlewareRepository(middlewares: middlewares, queue: self.queueService.queue(type: .serial))
     }
 
-    public func dispatch(_ action: StoreAction, isRedispatch: Bool = false, on queueType: DispatchQueueSyncService.DispatchQueueType = .serial) {
+    public func dispatch(_ action: StoreAction, on queueType: DispatchQueueSyncService.DispatchQueueType = .serial, isRedispatch: Bool = false) {
         middlewaresRepository.dispatch(    // Middleware
             state: state,
             action: action,
@@ -60,10 +81,10 @@ where StoreState: StateType,
             }
             return Empty<StoreAction, StoreMiddlewareRepository.MiddlewareRedispatch>()
         }
-        .flatMap { [unowned self] in dispatcher($0, self.packages) }   // Dispatch
-        .flatMap { [unowned self] in reducer(state, $0) }   // Reduce
         .assertNoFailure()
+        .flatMap { [unowned self] in dispatcher($0, self.packages) }   // Dispatch
         .receive(on: DispatchQueue.main)
+        .flatMap { [unowned self] in reducer(state, $0) }   // Reduce
         .compactMap {
             switch $0 {
             case let .state(state):

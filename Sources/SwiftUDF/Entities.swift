@@ -96,7 +96,7 @@ public protocol CoordinatorType: View {
 }
 
 public extension NavigationPath {
-    static let sharedPath = NavigationPath()
+    fileprivate static let sharedPath = NavigationPath()
 }
 public extension CoordinatorType {
     var path: NavigationPath { NavigationPath.sharedPath }
