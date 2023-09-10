@@ -22,7 +22,7 @@ extension StateStoreType {
     public typealias MiddlewareRedispatch = StoreMiddlewareRepository.MiddlewareRedispatch
 }
 
-public final class StateStore<
+open class StateStore<
     StoreState,
     StoreAction,
     StoreMutation,
@@ -46,7 +46,7 @@ where StoreState: StateType,
     private let reducer: StoreReducer
     private(set) public var packages: StorePackages
     private let queueService: DispatchQueueSyncService
-    private var middlewaresRepository: StoreMiddlewareRepository
+    private var middlewareRepository: StoreMiddlewareRepository
 
     public init(
         state: StoreState,
@@ -61,11 +61,11 @@ where StoreState: StateType,
         self.reducer = reducer
         self.packages = packages
         self.queueService = queueService
-        self.middlewaresRepository = MiddlewareRepository(middlewares: middlewares, queue: self.queueService.queue(type: .serial))
+        self.middlewareRepository = MiddlewareRepository(middlewares: middlewares, queue: self.queueService.queue(type: .serial))
     }
 
-    public func dispatch(_ action: StoreAction, on queueType: DispatchQueueSyncService.DispatchQueueType = .serial, isRedispatch: Bool = false) {
-        middlewaresRepository.dispatch(    // Middleware
+    public final func dispatch(_ action: StoreAction, on queueType: DispatchQueueSyncService.DispatchQueueType = .serial, isRedispatch: Bool = false) {
+        middlewareRepository.dispatch(    // Middleware
             state: state,
             action: action,
             packages: packages,
@@ -101,7 +101,7 @@ where StoreState: StateType,
     public func reinit() -> Self {
         self.packages = self.packages.reinit()
         self.state = self.state.reinit()
-        self.middlewaresRepository = self.middlewaresRepository.reinit()
+        self.middlewareRepository = self.middlewareRepository.reinit()
 
         return self
     }
