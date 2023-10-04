@@ -2,8 +2,6 @@ import Foundation
 import Combine
 import os
 
-public typealias Redispatch = Fail
-
 public protocol MiddlewareRepositoryType {
     associatedtype StoreState: StateType
     associatedtype StoreAction: Action
@@ -111,4 +109,10 @@ where StoreState: StateType,
 
         return info
     }()
+}
+
+public typealias Redispatch = Fail
+
+public extension Array where Element: Action {
+    typealias stopFlow = [Element]
 }
