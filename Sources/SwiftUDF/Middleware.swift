@@ -2,6 +2,8 @@ import Foundation
 import Combine
 import os
 
+public typealias Redispatch = Fail
+
 public protocol MiddlewareRepositoryType {
     associatedtype StoreState: StateType
     associatedtype StoreAction: Action
